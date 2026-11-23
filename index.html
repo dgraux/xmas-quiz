@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Xmas Trivia Quiz</title>
+<style>
+:root{--bg:#0f2a1d;--card:#173c2a;--ink:#f4f7f2;--mute:#9fbfaa;--acc:#e8b84a;--ok:#3ecf72;--bad:#ef5b5b;
+--c0:#e5484d;--c1:#3e7be0;--c2:#e8a317;--c3:#2fa866}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at 20% 0,#1b4a33,var(--bg) 60%);color:var(--ink);font:16px/1.4 system-ui,Segoe UI,sans-serif;min-height:100vh}
+.view{display:none;max-width:980px;margin:0 auto;padding:20px 16px}
+.view.on{display:block}
+h1{margin:.2em 0;font-size:1.8rem}h2{margin:.3em 0}
+.card{background:var(--card);border-radius:16px;padding:20px;margin:12px 0}
+.mute{color:var(--mute)}
+button{font:inherit;border:0;border-radius:12px;padding:12px 20px;background:var(--acc);color:#222;font-weight:700;cursor:pointer}
+button.sec{background:#2a5a40;color:var(--ink)}
+button:disabled{opacity:.5;cursor:default}
+input[type=text],input[type=number]{font:inherit;padding:12px;border-radius:10px;border:2px solid #2a5a40;background:#0f2a1d;color:var(--ink);width:100%}
+label{display:block;margin:10px 0 4px;color:var(--mute)}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.row>*{flex:1}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip{background:#245c3f;border-radius:20px;padding:4px 12px;font-size:.9rem}
+.code{font-size:3rem;letter-spacing:.3em;font-weight:800;color:var(--acc)}
+.link{background:#0f2a1d;padding:10px;border-radius:10px;word-break:break-all;font-family:monospace;font-size:.9rem}
+.q{font-size:clamp(1.4rem,3.2vw,2.4rem);font-weight:700;margin:.4em 0}
+.bar{height:10px;background:#0f2a1d;border-radius:6px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--acc);width:100%}
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.ch{border-radius:14px;padding:18px 14px;font-weight:700;font-size:1.1rem;color:#fff;text-align:left;display:flex;gap:10px;align-items:center;position:relative;min-height:70px}
+.ch.c0{background:var(--c0)}.ch.c1{background:var(--c1)}.ch.c2{background:var(--c2)}.ch.c3{background:var(--c3)}
+.ch .cnt{margin-left:auto;background:#0006;border-radius:10px;padding:2px 10px;font-size:.9rem}
+.ch.dim{opacity:.35}.ch.right{outline:5px solid #fff}.ch.picked{outline:4px dashed #fff}
+button.ch{cursor:pointer;border:0}
+.lb{margin-top:6px}
+.lbrow{display:flex;align-items:center;gap:10px;margin:6px 0}
+.lbrow .n{width:28px;text-align:center;font-weight:800;color:var(--acc)}
+.lbrow .nm{width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lbrow .b{flex:1;background:#0f2a1d;border-radius:8px;height:26px;overflow:hidden}
+.lbrow .b i{display:block;height:100%;background:linear-gradient(90deg,var(--ok),#9be37a);transition:width .6s}
+.lbrow .s{width:70px;text-align:right;font-variant-numeric:tabular-nums}
+.big{font-size:2.4rem;font-weight:800}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+.meta{display:flex;justify-content:space-between;color:var(--mute);font-size:.9rem}
+.center{text-align:center}
+@media(max-width:560px){.choices{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ============ HOST ============ -->
+<div id="h-setup" class="view">
+  <h1>🎄 Xmas Trivia Quiz — Host</h1>
+  <div class="card">
+    <div class="row">
+      <div><label>Seconds to answer</label><input id="cfg-q" type="number" value="10" min="5" max="60"></div>
+      <div><label>Pause between questions (s)</label><input id="cfg-p" type="number" value="20" min="3" max="60"></div>
+      <div><label>Number of questions</label><input id="cfg-n" type="number" value="60" min="1" max="200"></div>
+    </div>
+    <label>Themes in the question bucket</label>
+    <div id="cfg-themes"></div>
+    <p class="mute" id="cfg-hint"></p>
+    <button id="h-create">Create room</button>
+  </div>
+</div>
+
+<div id="h-lobby" class="view">
+  <h1>🎄 Xmas Trivia Quiz</h1>
+  <div class="card center">
+    <div class="mute">Join with this link (share it on Google Meet)</div>
+    <div class="link" id="h-link"></div>
+    <div class="row" style="margin-top:10px"><button class="sec" id="h-copy">Copy link</button></div>
+    <div class="mute" style="margin-top:14px">Room code</div>
+    <div class="code" id="h-code"></div>
+  </div>
+  <div class="card">
+    <h2><span id="h-count">0</span> / 30 players</h2>
+    <div class="chips" id="h-players"></div>
+  </div>
+  <button id="h-start" disabled>Start quiz</button>
+</div>
+
+<div id="h-game" class="view">
+  <div class="meta"><span id="hg-prog"></span><span id="hg-theme"></span><span id="hg-ans"></span></div>
+  <div class="bar"><i id="hg-bar"></i></div>
+  <div class="q" id="hg-q"></div>
+  <div class="choices" id="hg-ch"></div>
+  <div class="card" id="hg-lbcard" style="display:none">
+    <h2>Top 5</h2><div class="lb" id="hg-lb"></div>
+  </div>
+  <div class="row" style="margin-top:14px">
+    <span class="mute" id="hg-status"></span>
+    <button class="sec" id="hg-hold" style="display:none">Hold</button>
+    <button class="sec" id="hg-next" style="display:none">Next question ▶</button>
+    <button class="sec" id="hg-end">End quiz</button>
+  </div>
+</div>
+
+<div id="h-end" class="view">
+  <h1>🏆 Final ranking</h1>
+  <div class="card"><div class="lb" id="he-lb"></div></div>
+  <button id="he-again">New game</button>
+</div>
+
+<!-- ============ PLAYER ============ -->
+<div id="p-join" class="view">
+  <h1>🎄 Xmas Trivia Quiz</h1>
+  <div class="card">
+    <label>Room code</label><input id="pj-room" type="text" maxlength="4" style="text-transform:uppercase">
+    <label>Your name</label><input id="pj-name" type="text" maxlength="20">
+    <p class="bad" id="pj-err"></p>
+    <button id="pj-go">Join</button>
+  </div>
+  <p class="center"><a href="?host" style="color:var(--mute);font-size:.85rem">Host a game</a></p>
+</div>
+
+<div id="p-wait" class="view center">
+  <h1 id="pw-title">You're in!</h1>
+  <p class="mute" id="pw-sub">Waiting for the host to start…</p>
+</div>
+
+<div id="p-q" class="view">
+  <div class="meta"><span id="pq-prog"></span><span id="pq-score"></span></div>
+  <div class="bar"><i id="pq-bar"></i></div>
+  <div class="q" id="pq-text"></div>
+  <div class="choices" id="pq-ch"></div>
+  <p class="center mute" id="pq-lock"></p>
+</div>
+
+<div id="p-r" class="view center">
+  <div class="big" id="pr-res"></div>
+  <p id="pr-gain" class="mute"></p>
+  <div class="card"><div>Your rank</div><div class="big"><span id="pr-rank"></span><span class="mute" style="font-size:1rem"> / <span id="pr-tot"></span></span></div><div id="pr-score" class="mute"></div></div>
+  <div class="card" style="text-align:left"><h2>Top 5</h2><div class="lb" id="pr-lb"></div></div>
+  <p class="mute">Next question coming up…</p>
+</div>
+
+<div id="p-end" class="view center">
+  <h1>🏆 Game over</h1>
+  <div class="card"><div>Your final rank</div><div class="big"><span id="pe-rank"></span> <span class="mute" style="font-size:1rem">/ <span id="pe-tot"></span></span></div><div id="pe-score" class="mute"></div></div>
+  <div class="card" style="text-align:left"><h2>Top 5</h2><div class="lb" id="pe-lb"></div></div>
+</div>
+
+<div id="msg" class="view center"><h2 id="msg-t"></h2></div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="questions.js"></script>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const params = new URLSearchParams(location.search);
+const MAXP = 30, PREFIX = "xmasquiz26-", LABELS = ["▲", "◆", "●", "■"];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const store = { get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch(e){} } };
+function show(id){ document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === id)); }
+function lbHTML(list){
+  const max = Math.max(1, ...list.map(p => p.score));
+  return list.map((p,i) => `<div class="lbrow"><span class="n">${i+1}</span><span class="nm">${esc(p.name)}</span><span class="b"><i style="width:${Math.round(100*p.score/max)}%"></i></span><span class="s">${p.score}</span></div>`).join("") || '<span class="mute">No players</span>';
+}
+function choicesHTML(choices, tag){
+  return choices.map((c,i) => `<${tag} class="ch c${i}" data-i="${i}"><span>${LABELS[i]}</span><span>${esc(c)}</span><span class="cnt" style="display:none"></span></${tag}>`).join("");
+}
+
+if (params.has("host")) hostMain(); else playerMain();
+
+/* ================================================================
+   HOST  (authoritative: scoring, timing and rankings are computed here)
+   ================================================================ */
+function hostMain(){
+  let cfg, peer, code, players = new Map(), deck = [], idx = -1, phase = "lobby",
+      qStart = 0, tick = null, pauseTimer = null, held = false, pauseLeft = 0;
+
+  show("h-setup");
+  const themeBox = $("#cfg-themes");
+  themeBox.innerHTML = Object.entries(THEMES).map(([k,v]) =>
+    `<label style="display:inline-block;margin-right:16px"><input type="checkbox" data-t="${k}" checked> ${v} (${QUESTIONS.filter(q=>q[0]===k).length})</label>`).join("");
+  const updHint = () => {
+    const n = QUESTIONS.filter(q => themeBox.querySelector(`[data-t="${q[0]}"]`).checked).length;
+    const per = (+$("#cfg-q").value) + (+$("#cfg-p").value), cnt = +$("#cfg-n").value;
+    $("#cfg-hint").textContent = `${n} questions in the bucket · ~${(60/per).toFixed(1)} questions/min · ~${Math.round(cnt*per/60)} min for ${cnt} questions`;
+  };
+  document.querySelectorAll("#h-setup input").forEach(i => i.oninput = updHint); updHint();
+
+  $("#h-create").onclick = () => {
+    cfg = { qsecs: Math.max(5, +$("#cfg-q").value||10), pause: Math.max(3, +$("#cfg-p").value||20), count: Math.max(1, +$("#cfg-n").value||60),
+            themes: [...themeBox.querySelectorAll("input:checked")].map(i => i.dataset.t) };
+    if (!cfg.themes.length) return alert("Pick at least one theme");
+    createRoom();
+  };
+
+  function createRoom(){
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    code = Array.from({length:4}, () => alphabet[Math.floor(Math.random()*alphabet.length)]).join("");
+    peer = new Peer(PREFIX + code);
+    peer.on("open", () => {
+      const link = location.origin + location.pathname + "?room=" + code;
+      $("#h-link").textContent = link; $("#h-code").textContent = code;
+      $("#h-copy").onclick = () => { navigator.clipboard && navigator.clipboard.writeText(link); $("#h-copy").textContent = "Copied!"; };
+      show("h-lobby"); renderLobby();
+    });
+    peer.on("error", e => { if (e.type === "unavailable-id") { peer.destroy(); createRoom(); } else { alert("Connection problem: " + e.type); } });
+    peer.on("disconnected", () => { try { peer.reconnect(); } catch(e){} });
+    peer.on("connection", c => {
+      c.on("data", d => onMsg(c, d));
+      c.on("close", () => { const p = players.get(c._tok); if (p && p.conn === c) { p.conn = null; renderLobby(); updAnswered(); } });
+    });
+  }
+
+  const send = (p, m) => { try { if (p.conn && p.conn.open) p.conn.send(m); } catch(e){} };
+  const broadcast = m => players.forEach(p => send(p, m));
+  const connected = () => [...players.values()].filter(p => p.conn);
+  function ranking(){ return [...players.values()].sort((a,b) => b.score - a.score || a.time - b.time); }
+
+  function renderLobby(){
+    const list = [...players.values()];
+    $("#h-count").textContent = list.filter(p => p.conn).length;
+    $("#h-players").innerHTML = list.map(p => `<span class="chip" style="${p.conn?'':'opacity:.4'}">${esc(p.name)}</span>`).join("");
+    $("#h-start").disabled = phase !== "lobby" || connected().length < 1;
+  }
+
+  function onMsg(c, m){
+    if (!m || typeof m !== "object") return;
+    if (m.t === "join") {
+      const tok = String(m.token||"").slice(0,40);
+      let p = players.get(tok);
+      if (!p) {
+        if (players.size >= MAXP) return c.send({t:"full"});
+        let name = String(m.name||"Player").trim().slice(0,20) || "Player", base = name, k = 2;
+        while ([...players.values()].some(x => x.name.toLowerCase() === name.toLowerCase())) name = base + " " + k++;
+        p = { name, score:0, time:0, streak:0, conn:null, ans:null };
+        players.set(tok, p);
+      }
+      c._tok = tok; p.conn = c;
+      c.send({t:"joined", name:p.name, phase});
+      if (phase === "q") { const rem = Math.max(1, cfg.qsecs - (performance.now()-qStart)/1000), q = deck[idx];
+        c.send({t:"q", i:idx+1, n:deck.length, text:q.q, choices:q.c, secs:rem, answered:p.ans?p.ans.c:null, score:p.score}); }
+      renderLobby();
+    } else if (m.t === "a") {
+      const p = players.get(c._tok);
+      if (!p || phase !== "q" || m.i !== idx+1 || p.ans) return;
+      const ms = performance.now() - qStart;
+      if (ms > cfg.qsecs*1000 + 800) return;
+      p.ans = { c: m.c|0, ms: Math.min(ms, cfg.qsecs*1000) };
+      send(p, {t:"ack"});
+      updAnswered();
+      if (connected().every(x => x.ans)) setTimeout(() => { if (phase === "q") reveal(); }, 700);
+    }
+  }
+
+  function updAnswered(){ if (phase === "q") $("#hg-ans").textContent = `${connected().filter(p=>p.ans).length} / ${connected().length} answered`; }
+
+  $("#h-start").onclick = startGame;
+  function startGame(){
+    let pool = QUESTIONS.filter(q => cfg.themes.includes(q[0]));
+    deck = shuffle(pool.slice()).slice(0, cfg.count).map(r => {
+      const choices = shuffle(r.slice(2).map((t,i) => ({t, ok:i===0})));
+      return { q:r[1], th:r[0], c:choices.map(x=>x.t), a:choices.findIndex(x=>x.ok) };
+    });
+    idx = -1; players.forEach(p => { p.score = 0; p.time = 0; p.streak = 0; p.ans = null; });
+    show("h-game"); nextQuestion();
+  }
+
+  function clearTimers(){ clearInterval(tick); clearInterval(pauseTimer); }
+
+  function nextQuestion(){
+    clearTimers();
+    if (idx + 1 >= deck.length) return endGame();
+    idx++; const q = deck[idx]; phase = "q"; held = false; qStart = performance.now();
+    players.forEach(p => p.ans = null);
+    broadcast({t:"q", i:idx+1, n:deck.length, text:q.q, choices:q.c, secs:cfg.qsecs, answered:null});
+    $("#hg-prog").textContent = `Question ${idx+1} / ${deck.length}`;
+    $("#hg-theme").textContent = THEMES[q.th];
+    $("#hg-q").textContent = q.q;
+    $("#hg-ch").innerHTML = choicesHTML(q.c, "div");
+    $("#hg-lbcard").style.display = "none";
+    $("#hg-next").style.display = $("#hg-hold").style.display = "none";
+    $("#hg-status").textContent = ""; updAnswered();
+    tick = setInterval(() => {
+      const rem = cfg.qsecs - (performance.now()-qStart)/1000;
+      $("#hg-bar").style.width = Math.max(0, 100*rem/cfg.qsecs) + "%";
+      $("#hg-status").textContent = Math.ceil(Math.max(0, rem)) + "s";
+      if (rem <= 0) reveal();
+    }, 100);
+  }
+
+  function reveal(){
+    if (phase !== "q") return;
+    phase = "r"; clearTimers();
+    const q = deck[idx], counts = [0,0,0,0];
+    players.forEach(p => {
+      p.gained = 0;
+      if (p.ans) { counts[p.ans.c] = (counts[p.ans.c]||0) + 1;
+        if (p.ans.c === q.a) { p.gained = Math.round(1000 * (1 - 0.5 * p.ans.ms / (cfg.qsecs*1000))); p.score += p.gained; p.time += p.ans.ms; p.streak++; }
+        else p.streak = 0; }
+      else p.streak = 0;
+    });
+    const rk = ranking(), top5 = rk.slice(0,5).map(p => ({name:p.name, score:p.score}));
+    players.forEach(p => send(p, {t:"r", correct:q.a, picked:p.ans?p.ans.c:null, gained:p.gained, score:p.score, rank:rk.indexOf(p)+1, total:rk.length, top5, streak:p.streak}));
+    document.querySelectorAll("#hg-ch .ch").forEach((el,i) => {
+      el.classList.toggle("right", i === q.a); el.classList.toggle("dim", i !== q.a);
+      const cn = el.querySelector(".cnt"); cn.style.display = ""; cn.textContent = counts[i];
+    });
+    $("#hg-bar").style.width = "0%";
+    $("#hg-lb").innerHTML = lbHTML(top5); $("#hg-lbcard").style.display = "";
+    $("#hg-next").style.display = $("#hg-hold").style.display = "";
+    $("#hg-hold").textContent = "Hold";
+    held = false; pauseLeft = cfg.pause;
+    const upd = () => $("#hg-status").textContent = held ? "On hold" : `Next question in ${pauseLeft}s`;
+    upd();
+    pauseTimer = setInterval(() => { if (held) return; pauseLeft--; upd(); if (pauseLeft <= 0) nextQuestion(); }, 1000);
+  }
+
+  $("#hg-hold").onclick = () => { held = !held; $("#hg-hold").textContent = held ? "Resume" : "Hold"; $("#hg-status").textContent = held ? "On hold" : `Next question in ${pauseLeft}s`; };
+  $("#hg-next").onclick = () => nextQuestion();
+  $("#hg-end").onclick = () => { if (confirm("End the quiz now?")) endGame(); };
+
+  function endGame(){
+    clearTimers(); phase = "end";
+    const rk = ranking(), top5 = rk.slice(0,5).map(p => ({name:p.name, score:p.score}));
+    players.forEach(p => send(p, {t:"end", rank:rk.indexOf(p)+1, total:rk.length, score:p.score, top5}));
+    $("#he-lb").innerHTML = lbHTML(rk.slice(0,10).map(p => ({name:p.name, score:p.score})));
+    show("h-end");
+  }
+  $("#he-again").onclick = () => { phase = "lobby"; idx = -1; players.forEach(p => { p.score = 0; p.time = 0; p.ans = null; }); renderLobby(); show("h-lobby");
+    broadcast({t:"joined", name:"", phase:"lobby"}); };
+}
+
+/* ================================================================
+   PLAYER
+   ================================================================ */
+function playerMain(){
+  let peer, conn, room = (params.get("room")||"").toUpperCase(), name = store.get("xq-name")||"", ended = false,
+      token = store.get("xq-token"), curQ = null, answered = false, qTimer = null, score = 0;
+  if (!token) { token = Math.random().toString(36).slice(2) + Date.now().toString(36); store.set("xq-token", token); }
+  $("#pj-room").value = room; $("#pj-name").value = name;
+  show("p-join");
+
+  $("#pj-go").onclick = () => {
+    room = $("#pj-room").value.trim().toUpperCase(); name = $("#pj-name").value.trim();
+    if (room.length !== 4 || !name) { $("#pj-err").textContent = "Enter the 4-letter room code and your name."; return; }
+    store.set("xq-name", name); $("#pj-err").textContent = ""; $("#pj-go").disabled = true; connect();
+  };
+
+  function connect(){
+    try { peer && peer.destroy(); } catch(e){}
+    peer = new Peer();
+    peer.on("open", () => {
+      conn = peer.connect(PREFIX + room, { reliable:true });
+      conn.on("open", () => conn.send({ t:"join", name, token }));
+      conn.on("data", onHost);
+      conn.on("close", () => { if (!ended) { flash("Reconnecting…"); setTimeout(connect, 2000); } });
+    });
+    peer.on("error", e => {
+      if (e.type === "peer-unavailable") { show("p-join"); $("#pj-go").disabled = false; $("#pj-err").textContent = "Room not found — check the code (the host must be online)."; }
+      else if (!ended) { flash("Connection issue, retrying…"); setTimeout(connect, 3000); }
+    });
+  }
+  function flash(t){ $("#msg-t").textContent = t; show("msg"); }
+
+  function onHost(m){
+    if (m.t === "full") { ended = true; flash("Sorry, this room is full (30 players)."); }
+    else if (m.t === "joined") {
+      $("#pw-title").textContent = m.name ? `You're in, ${m.name}!` : "Get ready!";
+      if (m.phase === "lobby" || m.phase === "r") { show("p-wait"); }
+    }
+    else if (m.t === "q") renderQ(m);
+    else if (m.t === "ack") { $("#pq-lock").textContent = "Answer locked in ✔ — waiting for the others…"; }
+    else if (m.t === "r") renderR(m);
+    else if (m.t === "end") { ended = true;
+      $("#pe-rank").textContent = m.rank; $("#pe-tot").textContent = m.total; $("#pe-score").textContent = m.score + " points";
+      $("#pe-lb").innerHTML = lbHTML(m.top5); show("p-end"); }
+  }
+
+  function renderQ(m){
+    curQ = m; answered = m.answered !== null && m.answered !== undefined; score = m.score ?? score;
+    $("#pq-prog").textContent = `Question ${m.i} / ${m.n}`; $("#pq-score").textContent = score + " pts";
+    $("#pq-text").textContent = m.text; $("#pq-lock").textContent = answered ? "Answer locked in ✔" : "";
+    const box = $("#pq-ch"); box.innerHTML = choicesHTML(m.choices, "button");
+    box.querySelectorAll(".cnt").forEach(e => e.remove());
+    if (answered) { box.querySelectorAll(".ch").forEach((b,i) => { b.disabled = true; b.classList.toggle("picked", i === m.answered); }); }
+    box.querySelectorAll(".ch").forEach(b => b.onclick = () => {
+      if (answered) return; answered = true;
+      const i = +b.dataset.i; conn.send({ t:"a", i:m.i, c:i });
+      box.querySelectorAll(".ch").forEach(x => { x.disabled = true; x.classList.toggle("picked", x === b); x.classList.toggle("dim", x !== b); });
+      $("#pq-lock").textContent = "Sending…";
+    });
+    clearInterval(qTimer); const t0 = performance.now();
+    qTimer = setInterval(() => { const rem = m.secs - (performance.now()-t0)/1000;
+      $("#pq-bar").style.width = Math.max(0, 100*rem/m.secs) + "%"; if (rem <= 0) clearInterval(qTimer); }, 100);
+    show("p-q");
+  }
+
+  function renderR(m){
+    clearInterval(qTimer); score = m.score;
+    const got = m.picked === m.correct, none = m.picked === null;
+    $("#pr-res").innerHTML = none ? '<span class="bad">⏱ Too slow!</span>' : got ? '<span class="ok">✔ Correct!</span>' : '<span class="bad">✘ Wrong</span>';
+    $("#pr-gain").textContent = got ? `+${m.gained} points${m.streak > 1 ? " · streak x" + m.streak : ""}` : (curQ ? "Right answer: " + curQ.choices[m.correct] : "");
+    $("#pr-rank").textContent = m.rank; $("#pr-tot").textContent = m.total; $("#pr-score").textContent = m.score + " points";
+    $("#pr-lb").innerHTML = lbHTML(m.top5); show("p-r");
+  }
+}
+</script>
+</body>
+</html>
