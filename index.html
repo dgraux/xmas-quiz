@@ -113,6 +113,10 @@ button.ch{cursor:pointer;border:0}
     <p class="bad" id="pj-err"></p>
     <button id="pj-go">Join</button>
   </div>
+  <div class="card">
+    <div class="row"><strong style="flex:3">Having trouble joining?</strong><button class="sec" id="pj-test" style="flex:1">Test connection</button></div>
+    <div id="pj-testout" class="mute" style="margin-top:8px"></div>
+  </div>
   <p class="center"><a href="?host" style="color:var(--mute);font-size:.85rem">Host a game</a></p>
 </div>
 
@@ -344,7 +348,67 @@ function playerMain(){
     store.set("xq-name", name); $("#pj-err").textContent = ""; $("#pj-go").disabled = true; connect();
   };
 
+  /* ---- Connection test: checks each thing the game needs, in order ---- */
+  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error("timeout")), ms))]);
+  async function runTest(){
+    const out = $("#pj-testout"), lines = [];
+    const draw = extra => out.innerHTML = lines.concat(extra ? [extra] : []).join("<br>");
+    const ok = t => lines.push(`<span class="ok">✔</span> ${t}`), ko = (t, hint) => lines.push(`<span class="bad">✘</span> ${t}${hint ? `<br>&nbsp;&nbsp;&nbsp;<small>${hint}</small>` : ""}`);
+    $("#pj-test").disabled = true; draw("Testing…");
+
+    if (typeof Peer === "undefined") ko("Game library (PeerJS) could not load", "unpkg.com is probably blocked by your network or an extension. Try another network or disable the blocker.");
+    else ok("Game library loaded");
+
+    const hasRTC = typeof RTCPeerConnection !== "undefined";
+    if (hasRTC) ok("Browser supports WebRTC"); else ko("Browser does not support WebRTC", "Use a recent Chrome, Edge, Firefox or Safari; privacy modes can disable it.");
+    draw("Testing…");
+
+    if (hasRTC) {
+      try {
+        const types = await withTimeout(new Promise(res => {
+          const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] }), seen = new Set();
+          pc.createDataChannel("t");
+          pc.onicecandidate = e => { if (!e.candidate) { pc.close(); res(seen); } else { const m = / typ (\w+)/.exec(e.candidate.candidate); if (m) seen.add(m[1]); } };
+          pc.createOffer().then(o => pc.setLocalDescription(o));
+        }), 6000);
+        if (types.has("srflx")) ok("Network lets WebRTC reach the internet (STUN OK)");
+        else ko("WebRTC could not discover a public address", "A firewall or VPN is likely blocking WebRTC. Try without VPN, or from phone data/another Wi-Fi.");
+      } catch (e) { ko("WebRTC network test timed out", "A firewall or VPN is likely blocking WebRTC. Try without VPN, or from phone data/another Wi-Fi."); }
+      draw("Testing…");
+    }
+
+    if (typeof Peer !== "undefined") {
+      let tp;
+      try {
+        await withTimeout(new Promise((res, rej) => { tp = new Peer(); tp.on("open", res); tp.on("error", rej); }), 8000);
+        ok("Reached the PeerJS matchmaking server");
+      } catch (e) { ko("Could not reach the PeerJS matchmaking server (0.peerjs.com)", "It may be blocked by your network, or temporarily down."); }
+      try { tp && tp.destroy(); } catch(e){}
+    }
+
+    const room = $("#pj-room").value.trim().toUpperCase();
+    if (room.length === 4 && typeof Peer !== "undefined") {
+      draw("Testing…");
+      let tp2;
+      try {
+        await withTimeout(new Promise((res, rej) => {
+          tp2 = new Peer();
+          tp2.on("error", e => e.type === "peer-unavailable" ? rej(new Error("nohost")) : rej(e));
+          tp2.on("open", () => { const c = tp2.connect(PREFIX + room, { reliable: true }); c.on("open", res); });
+        }), 10000);
+        ok(`Connected to room ${room}`);
+      } catch (e) { ko(`Could not reach room ${room}`, e.message === "nohost" ? "Check the code, and make sure the host is online and has created the room." : "Connection to the host timed out: your network is probably blocking peer-to-peer traffic."); }
+      try { tp2 && tp2.destroy(); } catch(e){}
+    } else lines.push('<span class="mute">Enter the room code above to also test the connection to the host.</span>');
+
+    const failed = lines.some(l => l.includes('class="bad"'));
+    lines.push(failed ? '<br><strong>Send a screenshot of this to the host.</strong>' : '<br><strong>All good — you should be able to join.</strong>');
+    draw(); $("#pj-test").disabled = false;
+  }
+  $("#pj-test").onclick = runTest;
+
   function connect(){
+    if (typeof Peer === "undefined") { show("p-join"); $("#pj-go").disabled = false; $("#pj-err").textContent = "The game library failed to load. Run the connection test below."; return; }
     try { peer && peer.destroy(); } catch(e){}
     peer = new Peer();
     peer.on("open", () => {
